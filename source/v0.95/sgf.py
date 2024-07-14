@@ -1,12 +1,13 @@
-# Simple Gappiness Filter to trim alignments
+# Simple Gappiness Filter to trim alignments (SGF)
 #
 # This removes sites with too little data to be helpful for phylogenetic analyses.
 # 
 # It does not distinguish terminal versus internal gaps, and therefore
 # it is not intended to assess alignment quality or phylogenetic noise.
+# However, used with permissive settings it can remove sites with too little information
+# to be worth the computational cost or possibility of artifacts of including low occupancy regions.
 
 # Wayne Maddison
-# This is translated from Java, so please forgive my accent
 
 version = "0.95, July 2024"
 
@@ -29,6 +30,8 @@ minGappyBlockSize = 5 # If in a block of at least this many sites, the first and
 blockGappinessThreshold = 0.5 # and the proportion of bad sites is this or above,
 minGappyBoundary = 4 # and there are no stretches of this many good sites in a row,
 
+forgiveTaxaWithoutData = True # Forgive taxa without any data (i.e., don't count their gaps).
+
 import argparse
 parser = argparse.ArgumentParser("Gappy")
 parser.add_argument("-input", help="File to be read. Must be DNA/RNA data and in FASTA format, aligned.", default = "infile.fas")
@@ -39,6 +42,9 @@ parser.add_argument("-siteGT", help="Site gappy threshold. Proportion of gaps fo
 parser.add_argument("-blockSize", help="Minimum size of gappy block. Integer.", type=int, default = minGappyBlockSize)
 parser.add_argument("-blockGT", help="Block gappy threshold. Proportion of gappy sites for block to be considered gappy. Proportion (0 to 1)", type=float, default = blockGappinessThreshold)
 parser.add_argument("-boundary", help="Boundary size. Minimum size of non-gappy block to stop gappy block. Integer.", type=int, default = minGappyBoundary)
+parser.add_argument("-f", help="Forgive taxa without any data (i.e., don't count their gaps).", action='store_true')
+parser.add_argument("-not.f", help="Count gaps even in taxa with no data.", dest='f', action='store_false')
+parser.set_defaults(f=True)
 
 parser.add_argument("-v", help="Verbose.", action="store_true", default = False)
 args = parser.parse_args()
@@ -50,6 +56,7 @@ siteGappinessThreshold = args.siteGT
 minGappyBlockSize = args.blockSize
 blockGappinessThreshold = args.blockGT
 minGappyBoundary = args.boundary
+forgiveTaxaWithoutData = args.f
 
 
 verbose = args.v
@@ -60,6 +67,10 @@ if (verbose):
 	print("\nSimple Gappiness Filter (SGF) (version ", version, ") with parameters: ")
 	if (filterBlockGappiness or filterSiteGappiness):
 		print("\n Proportion of gaps for site to be considered gappy: ", args.siteGT)
+		if (forgiveTaxaWithoutData):
+			print("\n Not counting gaps in taxa with no data.")
+		else:
+			print("\n Counting gaps even in taxa with no data.")
 		if (filterSiteGappiness):
 			print("\n Filtering individual sites that are too gappy.")
 		if (filterBlockGappiness):
@@ -71,7 +82,7 @@ if (verbose):
 	else:
 		print("\n   NOTHING DONE BY GAPPINESS FILTER: You must indicate whether you want sites (-gS) and/or blocks (-gB) to be filtered")
 else:
-	print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary)
+	print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary, "f=", args.f)
 
 #============================= Reading the data ===================
 #=============================
@@ -125,26 +136,27 @@ else:
 
 toDelete = [False for k in range(numChars)]
 
-taxonSequenceStart = [-1 for i in range(numTaxa)] # first non-gap site in taxon i
-taxonSequenceEnd = [-1 for i in range(numTaxa)]  # last non-gap site in taxon i
-
-# determine first and last nucleotides of each sequence, since terminal gaps are forgiven
-def getFirstInSequence(i):
+def anyData(i):
 	for k in range(numChars):
 		if (sequences[i][k] != "-"):
-			return k
-	return -1
-def getLastInSequence(i):
-	for k in range(numChars):
-		if (sequences[i][numChars-k-1] != "-"):
-			return numChars-k-1
-	return -1
-numTaxaWithSequence = 0
-for i in range(numTaxa):
-	taxonSequenceStart[i] = getFirstInSequence(i)
-	taxonSequenceEnd[i] = getLastInSequence(i)
-	if (taxonSequenceStart[i] >=0):
-		numTaxaWithSequence += 1
+			return True
+	return False
+
+if (forgiveTaxaWithoutData):
+	taxonHasData = [False for i in range(numTaxa)]
+	numTaxaCounted = 0
+	for i in range(numTaxa):
+		taxonHasData[i] = anyData(i)
+		if (taxonHasData[i]):
+			numTaxaCounted += 1
+else:
+	numTaxaCounted = numTaxa
+	
+def countTaxon(t):
+	if (forgiveTaxaWithoutData):
+		return taxonHasData[t]
+	return True
+
 
 #============================= Gappiness filter ===================
 #	CCCCAA--A--A------TTTT--AACCCC
@@ -158,18 +170,19 @@ for i in range(numTaxa):
 
 def gappySite(k):
 	return siteGappiness[k]>=siteGappinessThreshold
-	
+
 siteGappiness = [0 for k in range(numChars)]
 for ic in range(numChars):
 	gapCount = 0
 	for it in range(numTaxa):
-		if (sequences[it][ic] == "-"):
+		if (countTaxon(it) and sequences[it][ic] == "-"):
 			gapCount+=1
-	siteGappiness[ic] = 1.0*gapCount/numTaxa #numTaxaWithSequence if ignora dataless taxa
-	if (gapCount == numTaxa): #/if all gaps, delete regardless
+	siteGappiness[ic] = 1.0*gapCount/numTaxaCounted #in case we are to ignore dataless taxa
+	if (gapCount == numTaxaCounted): #/if all gaps, delete regardless
 		toDelete[ic] = True
 	if (filterSiteGappiness and gappySite(ic)):
 		toDelete[ic] = True		
+
 if (filterBlockGappiness):
 	def isGapBlockBoundary(k):
 		i = 0

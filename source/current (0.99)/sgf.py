@@ -6,30 +6,30 @@
 # it is not intended to assess alignment quality or phylogenetic noise.
 # However, used with permissive settings it can remove sites with too little information
 # to be worth the computational cost or possibility of artifacts of including low occupancy regions.
+#
+# This trimmer was built to prepare an alignment for PhyIN trimming.
 
 # Wayne Maddison
 
-version = "0.95, July 2024"
+version = "0.99, July 2024"
 
 # example command:
 # python sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4
 # or
 # python3 sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4
+#
 # Requires python3
+# Requires fasta formatted alignment files
 
 #============================= setting up parameters ===================
 inFileName = "infile.fas"
 outFileName = "outfile.fas"
-
-#Gappiness filter
 filterSiteGappiness = False 
 filterBlockGappiness = False
-
 siteGappinessThreshold = 0.5 # A site is considered good (for gappiness) if it is less gappy than this (term or non-term).
 minGappyBlockSize = 5 # If in a block of at least this many sites, the first and last site is bad,
 blockGappinessThreshold = 0.5 # and the proportion of bad sites is this or above,
 minGappyBoundary = 4 # and there are no stretches of this many good sites in a row,
-
 forgiveTaxaWithoutData = True # Forgive taxa without any data (i.e., don't count their gaps).
 
 import argparse
@@ -57,11 +57,7 @@ minGappyBlockSize = args.blockSize
 blockGappinessThreshold = args.blockGT
 minGappyBoundary = args.boundary
 forgiveTaxaWithoutData = args.f
-
-
 verbose = args.v
-
-
 
 if (verbose):
 	print("\nSimple Gappiness Filter (SGF) (version ", version, ") with parameters: ")
@@ -82,10 +78,12 @@ if (verbose):
 	else:
 		print("\n   NOTHING DONE BY GAPPINESS FILTER: You must indicate whether you want sites (-gS) and/or blocks (-gB) to be filtered")
 else:
-	print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary, "f=", args.f)
+	if (filterBlockGappiness or filterSiteGappiness):
+		print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary, "f=", args.f)
+	else:
+		print("NOTHING DONE BY GAPPINESS FILTER: You must indicate whether you want sites (-gS) and/or blocks (-gB) to be filtered")
 
 #============================= Reading the data ===================
-#=============================
 # Read FASTA file
 fastaFile = open(inFileName,'r')
 
@@ -112,7 +110,7 @@ if (verbose):
 	print(countTaxa, "sequences in alignment")
 
 
-# Checking this is an alignment, i.e. all sequences are the same length
+# Minimal error checking
 if len(sequences) == 0:
 	print("ERROR: No sequences read.")
 	exit(42)
@@ -130,13 +128,10 @@ if (verbose):
 	print("Number of sites: ", numChars)
 else:
 	print("Number of sequences (taxa): ", numTaxa, "; Number of sites: ", numChars)
-	
 
-
-
-toDelete = [False for k in range(numChars)]
-
-def anyData(i):
+#..........................
+# Setting up information about whether taxa have any data, in case forgiveTaxaWithoutData = true
+def anyData(i):  ## does a taxon have any data at all?
 	for k in range(numChars):
 		if (sequences[i][k] != "-"):
 			return True
@@ -168,6 +163,9 @@ def countTaxon(t):
 #	In the above, the column after the Gs is the first bad site, and the two following As columns are too narrow to stop the block. However, the Ts
 #	columns are 4 in a row, so they stop the block
 
+# This array will record whether the site is marked for deletion
+toDelete = [False for k in range(numChars)]
+
 def gappySite(k):
 	return siteGappiness[k]>=siteGappinessThreshold
 
@@ -178,7 +176,7 @@ for ic in range(numChars):
 		if (countTaxon(it) and sequences[it][ic] == "-"):
 			gapCount+=1
 	siteGappiness[ic] = 1.0*gapCount/numTaxaCounted #in case we are to ignore dataless taxa
-	if (gapCount == numTaxaCounted): #/if all gaps, delete regardless
+	if (gapCount == numTaxaCounted): #/if all gaps, delete regardless of settings
 		toDelete[ic] = True
 	if (filterSiteGappiness and gappySite(ic)):
 		toDelete[ic] = True		
@@ -224,7 +222,7 @@ else:
 	print("  Sites deleted:", numDeletedForGappiness, "; retained:", (numChars-numDeletedForGappiness))
 
 
-#============================= Writing sequences without high conflict regions (trimmed) ===================
+#============================= Writing sequences without high gappiness regions (trimmed) ===================
 if (verbose):
 	print("Writing trimmed sequences to file " + outFileName)
 #Sites to delete have been found.  Now to write the output file without them

@@ -3,16 +3,17 @@
 # Wayne Maddison
 # This is translated from Java, so please forgive my accent
 
-version = "0.95, July 2024"
+version = "0.99, July 2024"
 
 #example command:
 # python phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e
 # or
 # python3 phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e
-# (Requires python3)
 #
+# Requires python3
+# Requires fasta formatted alignment files
 
-#============================= setting up parameters ===================
+#============================= Setting up parameters ===================
 inFileName = "infile.fas"
 outFileName = "outfile.fas"
 
@@ -57,7 +58,6 @@ else:
 	print("PhyIN trimming (v.", version, "): b=", args.b, "p=", args.p, "d=", args.d, "e=",  args.e)
 
 #============================= Reading the data ===================
-#=============================
 # Read FASTA file
 fastaFile = open(inFileName,'r')
 
@@ -79,22 +79,20 @@ for line in fastaFile:
 			sequences[currentTaxon] += line #not a taxon, therefore sequence, therefore concatenate to the current taxon's sequence
 fastaFile.close()
 
-
-# Checking this is an alignment, i.e. that there are sequences, and that all sequences are the same length
+# Minimal error checking. 
 if len(sequences) == 0:
 	print("ERROR: No sequences read.")
 	exit(42)
 
-numChars = len(sequences[0])
+numChars = len(sequences[0]) #NUMBER OF CHARACTERS (sites, columns)
 for x in sequences:
 	if (len(x) != numChars):
 		print("ERROR: This appears not to be an alignment; not all taxa have the same sequence length.")
 		exit(43)
 # perhaps put in here a check that it is DNA data? This is important because of assumption of 4 states + gap		
 		
-numTaxa = len(names)
+numTaxa = len(names) #NUMBER OF TAXA
 print("Number of sequences (taxa): ", numTaxa, "; Number of sites: ", numChars)
-
 
 # convert sequences as text to nucleotides as integer codes for quicker access later
 def getStateAsNumber(s): #need to translate character in sequence to internal representation of states
@@ -110,7 +108,6 @@ def getStateAsNumber(s): #need to translate character in sequence to internal re
 		return 4
 	else: # NOTE: this ignores all ambiguous bases
 		return -1
-
 
 if (verbose):
 	print("Finding conflict (incompatibilities) among neighbouring sites.")
@@ -138,7 +135,6 @@ if (verbose):
 # Thus, the stretch within that from first to last of the conflicted characters is selected (*).
 
 #=============================
-# Mark sites with conflict with neighbours
 
 #Set up arrays with default values
 hasConflict = [False for k in range(numChars)] # boolean array (numChars) of whether in conflict
@@ -215,7 +211,7 @@ def areIncompatible (k1, k2):
 	#trim state pair graph iteratively for single connections
 	while trimSingleConnects() and stopper > 0:
 		stopper -= 1
-		if (stopper == 1):
+		if (stopper <= 1):
 			print("ALERT SOMETHING WENT WRONG WITH THE PhyIN calculations (trimSingleConnects too many iterations)")
 			exit(44)
 	#.............................
@@ -230,7 +226,7 @@ def areIncompatible (k1, k2):
 	#That was the incompatibility test for sites k1 and k2
 
 #.............................
-# Now do the survey of sites
+# Now do the survey of sites to mark sites that are conflicted
 # Mark sites in conflict. Currently looks only to immediate neighbour. 
 for k in range(numChars): #For each site k
 	for d in range(1, neighbourDistance+1): #Look whether neighbours at varying distances from 1 to neighbourDistance away from k are in conflict
@@ -244,10 +240,9 @@ for k in range(numChars): #For each site k
 #At this point, individual sites having conflict are marked
 
 #============================= Finding regions (blocks) with too much conflict ===================
-#=============================
 # Scan for blocks with too much conflict. Selects only from conflicting to conflicting, even if that is less than blockLength
 
-# This array will record whether the site is to be marked for deletion
+# This array will record whether the site is marked for deletion
 toDelete = [False for k in range(numChars)]
 
 #.............................
@@ -272,16 +267,16 @@ def selectBlockByProportion(k):
 for k in range(numChars):
 	selectBlockByProportion(k)
 
-# count how many are to be deleted
-deleted = 0
+# count how many are to be deleted (just for user's information)
+numDeleted = 0
 for k in range(numChars):
 	if (toDelete[k]):
-		deleted += 1
+		numDeleted += 1
 
 if (verbose):
-	print("Incompatibilities assessed. Total sites originally:", numChars, " Deleted:", deleted, "\n")
+	print("Incompatibilities assessed. Total sites originally:", numChars, " Deleted:", numDeleted, "\n")
 else:
-	print("Total sites originally:", numChars, " Deleted:", deleted, "Retained:", (numChars-deleted))
+	print("Total sites originally:", numChars, " Deleted:", numDeleted, "Retained:", (numChars-numDeleted))
 
 
 #============================= Writing sequences without high conflict regions (trimmed) ===================

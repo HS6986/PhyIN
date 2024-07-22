@@ -7,18 +7,18 @@
 # However, used with permissive settings it can remove sites with too little information
 # to be worth the computational cost or possibility of artifacts of including low occupancy regions.
 #
-# This trimmer was built to prepare an alignment for PhyIN trimming.
+# This trimmer was built to be used with PhyIN trimming.
 
 # Wayne Maddison
 
-version = "0.99, July 2024"
+version = "0.991, July 2024"
 # Distributed under an MIT License (see end of file)
 # Look for new versions here: https://github.com/wmaddisn/PhyIN
 
 # example command:
-# python sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4
+# python sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4 -t -1
 # or
-# python3 sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4
+# python3 sgf.py -input alignment.fas -output trimmedAlignment.fas -siteGT 0.5 -gS -gB -blockSize 5 -blockGT 0.5 -boundary 4 -t -1
 #
 # Requires python3
 # Requires fasta formatted alignment files
@@ -32,7 +32,7 @@ siteGappinessThreshold = 0.5 # A site is considered good (for gappiness) if it i
 minGappyBlockSize = 5 # If in a block of at least this many sites, the first and last site is bad,
 blockGappinessThreshold = 0.5 # and the proportion of bad sites is this or above,
 minGappyBoundary = 4 # and there are no stretches of this many good sites in a row,
-forgiveTaxaWithoutData = True # Forgive taxa without any data (i.e., don't count their gaps).
+taxonCounting = -1 # Counting option for taxa. Options: -1, don't count gaps in taxa without data; 0, count gaps with taxa as is; 1 or higher, count gaps as if this were the total number of taxa
 
 import argparse
 parser = argparse.ArgumentParser("Gappy")
@@ -44,9 +44,9 @@ parser.add_argument("-siteGT", help="Site gappy threshold. Proportion of gaps fo
 parser.add_argument("-blockSize", help="Minimum size of gappy block. Integer.", type=int, default = minGappyBlockSize)
 parser.add_argument("-blockGT", help="Block gappy threshold. Proportion of gappy sites for block to be considered gappy. Proportion (0 to 1)", type=float, default = blockGappinessThreshold)
 parser.add_argument("-boundary", help="Boundary size. Minimum size of non-gappy block to stop gappy block. Integer.", type=int, default = minGappyBoundary)
-parser.add_argument("-f", help="Forgive taxa without any data (i.e., don't count their gaps).", action='store_true')
-parser.add_argument("-not.f", help="Count gaps even in taxa with no data.", dest='f', action='store_false')
-parser.set_defaults(f=True)
+tcExplanation = "Taxon counting option (-1, don't count gaps in taxa without data; 0, count gaps with taxa as is; 1 or higher, count gaps as if this were the total number of taxa)."
+tcExplanation += " The last option is helpful if processing separate files with different taxa represented, and yet you want them all to apply a gappiness stringency that would be used for the whole set of taxa."
+parser.add_argument("-t", help=tcExplanation, type=int, default = minGappyBoundary)
 
 parser.add_argument("-v", help="Verbose.", action="store_true", default = False)
 args = parser.parse_args()
@@ -58,17 +58,19 @@ siteGappinessThreshold = args.siteGT
 minGappyBlockSize = args.blockSize
 blockGappinessThreshold = args.blockGT
 minGappyBoundary = args.boundary
-forgiveTaxaWithoutData = args.f
+taxonCounting = args.t
 verbose = args.v
 
 if (verbose):
 	print("\nSimple Gappiness Filter (SGF) (version ", version, ") with parameters: ")
 	if (filterBlockGappiness or filterSiteGappiness):
 		print("\n Proportion of gaps for site to be considered gappy: ", args.siteGT)
-		if (forgiveTaxaWithoutData):
+		if (taxonCounting==-1):
 			print("\n Not counting gaps in taxa with no data.")
-		else:
+		elif (taxonCounting==0):
 			print("\n Counting gaps even in taxa with no data.")
+		elif (taxonCounting>0):
+			print("\n Counting gaps as if the total number of taxa were", taxonCounting)
 		if (filterSiteGappiness):
 			print("\n Filtering individual sites that are too gappy.")
 		if (filterBlockGappiness):
@@ -81,7 +83,7 @@ if (verbose):
 		print("\n   NOTHING DONE BY GAPPINESS FILTER: You must indicate whether you want sites (-gS) and/or blocks (-gB) to be filtered")
 else:
 	if (filterBlockGappiness or filterSiteGappiness):
-		print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary, "f=", args.f)
+		print("Simple Gappiness Filter (SGF) (v.", version, "): gB=", args.gB, "gS=", args.gS, "siteGT=", args.siteGT, "blockSize=", args.blockSize, "blockGT=", args.blockGT, "boundary=", args.boundary, "t=", args.t)
 	else:
 		print("NOTHING DONE BY GAPPINESS FILTER: You must indicate whether you want sites (-gS) and/or blocks (-gB) to be filtered")
 
@@ -132,25 +134,32 @@ else:
 	print("Number of sequences (taxa): ", numTaxa, "; Number of sites: ", numChars)
 
 #..........................
-# Setting up information about whether taxa have any data, in case forgiveTaxaWithoutData = true
+# Setting up information about whether taxa have any data, in case we are forgiving taxa without data (taxonCounting = -1)
 def anyData(i):  ## does a taxon have any data at all?
 	for k in range(numChars):
 		if (sequences[i][k] != "-"):
 			return True
 	return False
 
-if (forgiveTaxaWithoutData):
+# Gappiness of a column is #gaps/#taxa, but how taxa are counted depends on the taxonCounting option
+if (taxonCounting==-1): #not counting gaps in taxa without data; don't even count those taxa
 	taxonHasData = [False for i in range(numTaxa)]
 	numTaxaCounted = 0
 	for i in range(numTaxa):
 		taxonHasData[i] = anyData(i)
 		if (taxonHasData[i]):
 			numTaxaCounted += 1
+elif (taxonCounting>0): # counting gaps as if the number of taxa is as specified
+	if (taxonCounting<numTaxa):
+		print("ERROR: Specified number of taxa in SGF (", taxonCounting, ") is smaller than the number of taxa in the file",numTaxa,")")
+		numTaxaCounted = numTaxa
+	else:
+		numTaxaCounted = taxonCounting
 else:
-	numTaxaCounted = numTaxa
+	numTaxaCounted = numTaxa  # counting gaps with the taxa as is
 	
 def countTaxon(t):
-	if (forgiveTaxaWithoutData):
+	if (taxonCounting==-1):
 		return taxonHasData[t]
 	return True
 
@@ -174,6 +183,10 @@ def gappySite(k):
 siteGappiness = [0 for k in range(numChars)]
 for ic in range(numChars):
 	gapCount = 0
+	if (taxonCounting>0): #using aspecified number of taxa
+		gapCount = taxonCounting - numTaxa  #start with a gap count that is number of taxa not included in file!
+		if (gapCount <0):
+			gapCount = 0
 	for it in range(numTaxa):
 		if (countTaxon(it) and sequences[it][ic] == "-"):
 			gapCount+=1

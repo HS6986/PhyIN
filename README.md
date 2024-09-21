@@ -11,3 +11,4 @@ The primary release of PhyIN is in Java within the Mesquite environment (http://
 
 It is currently built to handle only nucleotide data and fasta files.
 
+doi: 10.5281/zenodo.8475

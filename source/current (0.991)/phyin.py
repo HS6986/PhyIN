@@ -3,17 +3,18 @@
 # Wayne Maddison
 # This is translated from Java, so please forgive my accent
 
-version = "0.99, July 2024"
+version = "0.991, September 2024"
 # Distributed under an MIT License (see end of file)
 # Look for new versions here: https://github.com/wmaddisn/PhyIN
 
 #example command:
-# python phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e
+# python phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e -sot 0
 # or
-# python3 phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e
+# python3 phyin.py -input alignment.fas -output trimmedAlignment.fas -b 10 -d 2 -p 0.5 -e -sot 0
 #
 # Requires python3
 # Requires fasta formatted alignment files
+# Requires nucleotide data
 
 
 #============================= Setting up parameters ===================
@@ -25,6 +26,8 @@ blockLength = 10 # parameter b
 propConflict = 0.5 # parameter p, proportion of neighbouring sites in conflict to trigger block selection
 neighbourDistance = 2 # parameter d
 gapsAsExtraState = True # parameter e, whether non-terminal gaps are treated as an extra state
+siteOccupancyThreshold = 0.0 # parameter sot, minimum site occupancy to keep site. A gappiness filter that is applied after PhyIN.
+siteOccupancyTotalNumberTaxa = 0 # parameter sotnt, listing number of taxa assumed for whole dataset if sot>0. Used for pipeline processing so that individual files can have the filter applied as if for whole set of taxa for all loci
 
 import argparse
 parser = argparse.ArgumentParser("phyin")
@@ -35,6 +38,8 @@ parser.add_argument("-d", help="Distance surveyed for conflict among neighbours.
 parser.add_argument("-p", help="Proportion of neighbouring sites in conflict to trigger block selection. Proportion (0 to 1)", type=float, default = propConflict)
 parser.add_argument("-e", help="Treat gaps as an extra state.", action='store_true')
 parser.add_argument("-not.e", help="Don't treat gaps as an extra state.", dest='e', action='store_false')
+parser.add_argument("-sot", help="Minimum site occupancy. (Optional.) Sites with proportion of non-gaps less than this will be removed. Proportion (0 to 1)", type=float, default = siteOccupancyThreshold)
+parser.add_argument("-sotnt", help="Number of taxa assumed for site occupancy filter. If 0, then use number of taxa in input file. Integer.", type=int, default = siteOccupancyTotalNumberTaxa)
 parser.set_defaults(e=True)
 parser.add_argument("-v", help="Verbose.", action="store_true", default = False)
 args = parser.parse_args()
@@ -45,6 +50,8 @@ propConflict = args.p
 gapsAsExtraState = args.e
 neighbourDistance = args.d
 verbose = args.v
+siteOccupancyThreshold = args.sot
+siteOccupancyTotalNumberTaxa = args.sotnt
 
 numStates = 4 
 if (gapsAsExtraState):
@@ -56,9 +63,20 @@ if (verbose):
 	print("   Proportion of neighbouring sites in conflict to trigger block selection: ", args.p)
 	print("   Distance surveyed for conflict among neighbours: ", args.d)
 	print("   Treat gaps as an extra state: ",  args.e)
+	if (siteOccupancyThreashold>0):
+		print("   Minimum site occupancy: ",  args.sot)
+		if (args.sotnt > 0):
+			print("   Number of taxa assumed for site occupancy filter: ",  args.sotnt)
+			
 	print("NOTE: PhyIN ignores ambiguity codes, and considers only A, a, C, c, G, g, T, t, U, u, and gaps (-).\n")
 else:
-	print("PhyIN trimming (v.", version, "): b=", args.b, "p=", args.p, "d=", args.d, "e=",  args.e)
+	if (siteOccupancyThreshold > 0):
+		if (args.sotnt > 0):
+			print("PhyIN trimming (v.", version, "): b=", args.b, "p=", args.p, "d=", args.d, "e=",  args.e, "sot=", args.sot, "sotnt=", args.sotnt)
+		else:
+			print("PhyIN trimming (v.", version, "): b=", args.b, "p=", args.p, "d=", args.d, "e=",  args.e, "sot=", args.sot)
+	else:
+		print("PhyIN trimming (v.", version, "): b=", args.b, "p=", args.p, "d=", args.d, "e=",  args.e)
 
 #============================= Reading the data ===================
 # Read FASTA file
@@ -276,11 +294,34 @@ for k in range(numChars):
 	if (toDelete[k]):
 		numDeleted += 1
 
-if (verbose):
-	print("Incompatibilities assessed. Total sites originally:", numChars, " Deleted:", numDeleted, "\n")
-else:
-	print("Total sites originally:", numChars, " Deleted:", numDeleted, "Retained:", (numChars-numDeleted))
+if (siteOccupancyThreshold<=0): #Just using PhyIN; therefore, time to report results
+	if (verbose):
+		print("Incompatibilities assessed. Total sites originally:", numChars, " Deleted by PhyIN:", numDeleted, "\n")
+	else:
+		print("Total sites originally:", numChars, " Deleted by PhyIN:", numDeleted, "Retained:", (numChars-numDeleted))
 
+#============================= Performing optional site occupancy filter ===================
+if (siteOccupancyThreshold>0):
+	if (siteOccupancyTotalNumberTaxa>0):
+		totalNumTaxa = siteOccupancyTotalNumberTaxa
+	else:
+		totalNumTaxa = numTaxa
+	numTooSparse = 0
+	retained = numChars
+	for ic in range(numChars):
+		occupancy = 0
+		for it in range(numTaxa):
+			if (sequences[it][ic] != "-"):
+				occupancy+=1
+		if (occupancy*1.0/totalNumTaxa < siteOccupancyThreshold): #/too little occupancy! (too many gaps)
+			toDelete[ic] = True
+			numTooSparse += 1
+		if (toDelete[ic]):
+			retained -= 1
+	if (verbose):
+		print("Incompatibilities & site occupancy assessed. Total sites originally:", numChars, " Deleted by PhyIN:", numDeleted, "Below occupancy threshold:", numTooSparse, "Total retained: ", retained, "\n")
+	else:
+		print("Total sites originally:", numChars, " Deleted by PhyIN:", numDeleted, "Deleted (too gappy):", numTooSparse, "Retained: ", retained)
 
 #============================= Writing sequences without high conflict regions (trimmed) ===================
 if (verbose):

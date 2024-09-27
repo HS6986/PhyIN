@@ -5,9 +5,9 @@ Version 0.991 September 2024
 
 Wayne Maddison
 
-This is an almost ready pre-release of the PhyIN method for trimming alignments for phylogenomics work.
+This is an almost ready pre-release of the PhyIN method for trimming alignments for phylogenomics work. It includes the standalone phython code.
 
-The primary release of PhyIN is in Java within the Mesquite environment (http://www.mesquiteproject.org). However, I provide this python code for use in bioinformatics pipelines.
+The primary release of PhyIN is in Java within the Mesquite environment (http://www.mesquiteproject.org), from which the snippet included here is derived. However, I provide this python code for use in bioinformatics pipelines.
 
 It is currently built to handle only nucleotide data and fasta files.
 

@@ -1,4 +1,4 @@
-/* This is a snippet of the Java code for PhyIN v. 0.991 as implemented in the pre-4.0 development version of Mesquite (www.mesquiteproject.org).
+/* This is a snippet of the Java code for PhyIN v. 0.992 as implemented in the pre-4.0 development version of Mesquite (www.mesquiteproject.org).
 
 This snippet resides in the class mesquite.molec.FlagByPhyIN.FlagByPhyIN 
 

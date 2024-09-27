@@ -3,7 +3,7 @@
 # Wayne Maddison
 # This is translated from Java, so please forgive my accent
 
-version = "0.991, September 2024"
+version = "0.992, September 2024"
 # Distributed under an MIT License (see end of file)
 # Look for new versions here: https://github.com/wmaddisn/PhyIN
 

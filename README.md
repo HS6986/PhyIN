@@ -1,7 +1,7 @@
 # PhyIN
 PhyIN sequence alignment trimming
 
-Version 0.991 September 2024
+Version 0.992 September 2024
 
 Wayne Maddison
 

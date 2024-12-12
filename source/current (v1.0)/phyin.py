@@ -41,6 +41,8 @@ parser.add_argument("-d", help="Distance surveyed for conflict among neighbours.
 parser.add_argument("-p", help="Proportion of neighbouring sites in conflict to trigger block selection. Proportion (0 to 1)", type=float, default = propConflict)
 parser.add_argument("-e", help="Treat gaps as an extra state.", action='store_true')
 parser.add_argument("-not.e", help="Don't treat gaps as an extra state.", dest='e', action='store_false')
+parser.add_argument("-codon", help="Enable codon-aware mode of trimming", action='store_true')
+
 #The following two arguments add a site occupancy filter (not formally part of PhyIN). 
 # If they are not included, site occupancy trimming is not done.  
 parser.add_argument("-sot", help="Minimum site occupancy. (Optional.) Sites with proportion of non-gaps less than this will be removed. Proportion (0 to 1)", type=float, default = siteOccupancyThreshold)
@@ -55,6 +57,7 @@ propConflict = args.p
 gapsAsExtraState = args.e
 neighbourDistance = args.d
 verbose = args.v
+codon = args.codon
 siteOccupancyThreshold = args.sot
 siteOccupancyTotalNumberTaxa = args.sotnt
 

@@ -1,7 +1,7 @@
 # PhyIN
 PhyIN sequence alignment trimming
 
-Towards codon-aware PhyIN approach
+Developed by Wayne Maddison
 
 It is currently built to handle only nucleotide data and fasta files.
 
